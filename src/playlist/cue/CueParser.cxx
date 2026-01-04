@@ -199,13 +199,13 @@ CueParser::Feed(std::string_view src) noexcept
 		if (type.data() == nullptr)
 			return;
 
-		if (type != "WAVE"sv &&
-		    type != "FLAC"sv && /* non-standard */
-		    type != "MP3"sv &&
-		    type != "AIFF"sv) {
-			state = IGNORE_FILE;
-			return;
-		}
+		// if (type != "WAVE"sv &&
+		//     type != "FLAC"sv && /* non-standard */
+		//     type != "MP3"sv &&
+		//     type != "AIFF"sv) {
+		// 	state = IGNORE_FILE;
+		// 	return;
+		// }
 
 		state = WAVE;
 		filename = new_filename;
