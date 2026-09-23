@@ -180,6 +180,25 @@ FindAncestorLoop(Storage &storage, Directory *parent,
 	return 0;
 }
 
+static bool
+HasUtf8CueSibling(Storage &storage, const Directory &directory,
+		  std::string_view name) noexcept
+{
+	if (!name.ends_with(".cue") || name.ends_with(".utf8.cue"))
+		return false;
+
+	std::string sibling{name.substr(0, name.size() - 4)};
+	sibling += ".utf8.cue";
+
+	try {
+		storage.GetInfo(PathTraitsUTF8::Build(directory.GetPath(), sibling),
+				false);
+		return true;
+	} catch (...) {
+		return false;
+	}
+}
+
 inline bool
 UpdateWalk::UpdateRegularFile(Directory &directory,
 			      const char *name,
@@ -187,6 +206,9 @@ UpdateWalk::UpdateRegularFile(Directory &directory,
 {
 	const char *suffix = PathTraitsUTF8::GetFilenameSuffix(name);
 	if (suffix == nullptr)
+		return false;
+
+	if (HasUtf8CueSibling(storage, directory, name))
 		return false;
 
 	return UpdateSongFile(directory, name, suffix, info) ||
