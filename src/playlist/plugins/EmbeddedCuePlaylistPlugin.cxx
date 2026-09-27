@@ -139,6 +139,7 @@ static const char *const embcue_playlist_suffixes[] = {
 	"mp3", "mp2",
 	"mp4", "mp4a", "m4b",
 	"ape",
+	"tak",
 	"wv",
 	"ogg", "oga",
 	nullptr
