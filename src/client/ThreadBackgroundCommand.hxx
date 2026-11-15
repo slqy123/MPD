@@ -20,6 +20,7 @@ class ThreadBackgroundCommand : public BackgroundCommand {
 	Thread thread;
 	InjectEvent defer_finish;
 	Client &client;
+	const char *const command;
 
 	/**
 	 * The error thrown by Run().
@@ -27,7 +28,8 @@ class ThreadBackgroundCommand : public BackgroundCommand {
 	std::exception_ptr error;
 
 public:
-	explicit ThreadBackgroundCommand(Client &_client) noexcept;
+	explicit ThreadBackgroundCommand(Client &_client,
+					 const char *_command="") noexcept;
 
 	auto &GetEventLoop() const noexcept {
 		return defer_finish.GetEventLoop();

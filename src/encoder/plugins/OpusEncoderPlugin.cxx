@@ -19,8 +19,11 @@
 
 namespace {
 
+static constexpr unsigned GRANULE_RATE = 48000;
+
 class OpusEncoder final : public OggEncoder {
 	const AudioFormat audio_format;
+	const unsigned granule_scale;
 
 	const size_t frame_size;
 
@@ -68,6 +71,7 @@ class PreparedOpusEncoder final : public PreparedEncoder {
 	int packet_loss;
 	int vbr;
 	int vbr_constraint;
+	const unsigned sample_rate;
 	const bool chaining;
 
 public:
@@ -82,7 +86,8 @@ public:
 };
 
 PreparedOpusEncoder::PreparedOpusEncoder(const ConfigBlock &block)
-	:chaining(block.GetBlockValue("opustags", false))
+	:sample_rate(block.GetBlockValue("sample_rate", GRANULE_RATE)),
+	 chaining(block.GetBlockValue("opustags", false))
 {
 	const char *value = block.GetBlockValue("bitrate", "auto");
 	if (strcmp(value, "auto") == 0)
@@ -138,6 +143,7 @@ opus_encoder_init(const ConfigBlock &block)
 OpusEncoder::OpusEncoder(AudioFormat &_audio_format, ::OpusEncoder *_enc, bool _chaining)
 	:OggEncoder(_chaining),
 	 audio_format(_audio_format),
+	 granule_scale(GRANULE_RATE / _audio_format.sample_rate),
 	 frame_size(_audio_format.GetFrameSize()),
 	 buffer_frames(_audio_format.sample_rate / 50),
 	 buffer_size(frame_size * buffer_frames),
@@ -151,8 +157,7 @@ OpusEncoder::OpusEncoder(AudioFormat &_audio_format, ::OpusEncoder *_enc, bool _
 Encoder *
 PreparedOpusEncoder::Open(AudioFormat &audio_format)
 {
-	/* libopus supports only 48 kHz */
-	audio_format.sample_rate = 48000;
+	audio_format.sample_rate = sample_rate;
 
 	if (audio_format.channels > 2)
 		audio_format.channels = 1;
@@ -215,7 +220,7 @@ OpusEncoder::DoEncode(bool eos)
 	if (result < 0)
 		throw std::runtime_error("Opus encoder error");
 
-	granulepos += buffer_position / frame_size;
+	granulepos += buffer_position / frame_size * granule_scale;
 
 	ogg_packet packet;
 	packet.packet = buffer2;
@@ -297,7 +302,7 @@ OpusEncoder::GenerateHead() noexcept
 	memcpy(header, "OpusHead", 8);
 	header[8] = 1;
 	header[9] = audio_format.channels;
-	*(uint16_t *)(header + 10) = ToLE16(lookahead);
+	*(uint16_t *)(header + 10) = ToLE16(lookahead * granule_scale);
 	*(uint32_t *)(header + 12) = ToLE32(audio_format.sample_rate);
 	header[16] = 0;
 	header[17] = 0;

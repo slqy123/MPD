@@ -777,6 +777,8 @@ Encodes into `Ogg Opus <http://www.opus-codec.org/>`_.
      - Description
    * - **bitrate**
      - Sets the data rate in bits per second. The special value "auto" lets libopus choose a rate (which is the default), and "max" uses the maximum possible data rate.
+   * - **sample_rate**
+     - Sets the Opus encoder input rate to 8000, 12000, 16000, 24000 or 48000 Hz (default).
    * - **complexity**
      - Sets the `Opus complexity <https://wiki.xiph.org/OpusFAQ#What_is_the_complexity_of_Opus.3F>`_.
    * - **signal**
