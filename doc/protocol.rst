@@ -1107,6 +1107,69 @@ remote playlists (absolute URI with a supported scheme).
             Append or replace an existing playlist.
             Fail if a playlist with name ``NAME`` doesn\'t already exist.
 
+Single-song audio export
+========================
+
+These commands are available when built with ``-Daudio_export=true``
+(the default).  They require the ``read`` permission.  Each connection can
+own one export session, independent of all partitions, queues, playback
+settings and audio outputs.  Use a dedicated connection for an export.
+These commands cannot be used in command lists.
+
+.. _command_openstream:
+
+:command:`openstream {URI} {START} {ENCODER} [BITRATE]`
+    Resolve a song URI using the normal database/storage and access checks,
+    then decode and encode it on demand.  Database virtual tracks, including
+    CUE tracks, use their stored real URI and start/end boundaries.
+
+    ``START`` is a non-negative offset in seconds relative to this song,
+    with millisecond resolution.  Non-zero offsets require a seekable source.
+    Seeking follows the selected MPD decoder's accuracy; it is not a promise
+    of sample-exact seeking for every format.  Unknown durations are allowed.
+
+    ``ENCODER`` names a compiled-in MPD encoder plugin, for example ``opus``,
+    ``vorbis``, ``lame``, ``flac``, ``wave`` or ``null`` (native raw PCM).
+    Optional ``BITRATE`` is in decimal kilobits per second and applies to
+    lossy encoders.  Plugin-specific restrictions still apply.  Without it,
+    plugin defaults apply, except ``lame`` and ``twolame`` default to 192.
+
+    The response includes ``type`` (MIME type), ``format`` (the encoder's
+    PCM input format), ``start`` (the first audio chunk's song-relative
+    timestamp), and ``duration`` (the full song duration, when known).
+    Raw PCM has MIME type ``application/octet-stream`` and uses MPD's
+    native sample representation.  PCM is converted as required by the
+    encoder.  Playback volume, filters, crossfade and ReplayGain are not
+    applied.  Decoding is not paced in real time.
+
+    Opening waits for the first audio chunk, so initialization and initial
+    seek errors are reported before a successful response.  An already open
+    session must first be closed.  After an asynchronous open/read failure,
+    close the session or disconnect before opening another one.
+
+.. _command_readstream:
+
+:command:`readstream`
+    Pull the next encoded chunk.  Returns ``offset`` (the byte offset within
+    this export), ``eof`` (0 or 1), and a :ref:`binary` payload.  Each payload
+    is at most the smaller of ``binarylimit`` and 256 KiB; smaller non-empty
+    chunks are normal.  Concatenate the payloads without the text framing.
+
+    ``eof: 1`` with an empty payload indicates successful completion after
+    the encoder's final data has been drained.  Further reads return the
+    same EOF.  Errors use ``ACK``, never a successful EOF.  Encoded chunks
+    are transport fragments, not individually timed codec packets.
+
+    Each session has a bounded PCM buffer.  Decoding waits when the caller
+    does not read, without dropping audio or buffering the whole song.
+
+.. _command_closestream:
+
+:command:`closestream`
+    Cancel decoding and free the session.  Succeeds even if none is open.
+    Disconnecting also cancels and frees the session.
+
+
 The music database
 ==================
 

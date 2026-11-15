@@ -535,11 +535,17 @@ subdir('src/archive')
 subdir('src/filter')
 subdir('src/mixer')
 subdir('src/output')
+need_encoder = need_encoder or get_option('audio_export')
+conf.set('ENABLE_AUDIO_EXPORT', get_option('audio_export'))
 subdir('src/lib/xiph')
 subdir('src/decoder')
 subdir('src/encoder')
 subdir('src/song')
 subdir('src/playlist')
+
+if get_option('audio_export')
+  sources += 'src/command/AudioStreamCommands.cxx'
+endif
 
 if curl_dep.found()
   sources += 'src/RemoteTagCache.cxx'

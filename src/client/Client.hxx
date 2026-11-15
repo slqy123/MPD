@@ -35,6 +35,7 @@ struct playlist;
 class Database;
 class Storage;
 class BackgroundCommand;
+class AudioStream;
 
 class Client final
 	: public IClient, FullyBufferedSocket
@@ -86,6 +87,9 @@ public:
 	 * client.
 	 */
 	LastInputStream last_album_art;
+
+	/** A single-song export, independent of the partition/player. */
+	std::shared_ptr<AudioStream> audio_stream;
 
 private:
 	static constexpr size_t MAX_SUBSCRIPTIONS = 16;

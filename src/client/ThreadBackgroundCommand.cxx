@@ -6,10 +6,11 @@
 #include "Response.hxx"
 #include "command/CommandError.hxx"
 
-ThreadBackgroundCommand::ThreadBackgroundCommand(Client &_client) noexcept
+ThreadBackgroundCommand::ThreadBackgroundCommand(Client &_client,
+						 const char *_command) noexcept
 	:thread(BIND_THIS_METHOD(_Run)),
 	 defer_finish(_client.GetEventLoop(), BIND_THIS_METHOD(DeferredFinish)),
-	 client(_client)
+	 client(_client), command(_command)
 {
 }
 
@@ -39,6 +40,7 @@ ThreadBackgroundCommand::DeferredFinish() noexcept
 
 	/* send the response */
 	Response response(client, 0);
+	response.SetCommand(command);
 
 	if (error) {
 		PrintError(response, error);

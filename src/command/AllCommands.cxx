@@ -12,6 +12,7 @@
 #include "StorageCommands.hxx"
 #include "DatabaseCommands.hxx"
 #include "FileCommands.hxx"
+#include "AudioStreamCommands.hxx"
 #include "OutputCommands.hxx"
 #include "MessageCommands.hxx"
 #include "NeighborCommands.hxx"
@@ -81,6 +82,9 @@ static constexpr struct command commands[] = {
 	{ "clearerror", PERMISSION_PLAYER, 0, 0, handle_clearerror },
 	{ "cleartagid", PERMISSION_ADD, 1, 2, handle_cleartagid },
 	{ "close", PERMISSION_NONE, -1, -1, handle_close },
+#ifdef ENABLE_AUDIO_EXPORT
+	{ "closestream", PERMISSION_READ, 0, 0, handle_close_stream },
+#endif
 	{ "commands", PERMISSION_NONE, 0, 0, handle_commands },
 	{ "config", PERMISSION_ADMIN, 0, 0, handle_config },
 	{ "consume", PERMISSION_PLAYER, 1, 1, handle_consume },
@@ -134,6 +138,9 @@ static constexpr struct command commands[] = {
 	{ "newpartition", PERMISSION_ADMIN, 1, 1, handle_newpartition },
 	{ "next", PERMISSION_PLAYER, 0, 0, handle_next },
 	{ "notcommands", PERMISSION_NONE, 0, 0, handle_not_commands },
+#ifdef ENABLE_AUDIO_EXPORT
+	{ "openstream", PERMISSION_READ, 3, 4, handle_open_stream },
+#endif
 	{ "outputs", PERMISSION_READ, 0, 0, handle_devices },
 	{ "outputset", PERMISSION_ADMIN, 3, 3, handle_outputset },
 	{ "partition", PERMISSION_READ, 1, 1, handle_partition },
@@ -163,6 +170,9 @@ static constexpr struct command commands[] = {
 	{ "readcomments", PERMISSION_READ, 1, 1, handle_read_comments },
 	{ "readmessages", PERMISSION_READ, 0, 0, handle_read_messages },
 	{ "readpicture", PERMISSION_READ, 2, 2, handle_read_picture },
+#ifdef ENABLE_AUDIO_EXPORT
+	{ "readstream", PERMISSION_READ, 0, 0, handle_read_stream },
+#endif
 	{ "rename", PERMISSION_CONTROL, 2, 2, handle_rename },
 	{ "repeat", PERMISSION_PLAYER, 1, 1, handle_repeat },
 	{ "replay_gain_mode", PERMISSION_PLAYER, 1, 1,

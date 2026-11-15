@@ -9,6 +9,9 @@
 #include "util/StringAPI.hxx"
 #include "util/CharUtil.hxx"
 
+#include <string_view>
+#include <string.h>
+
 #define CLIENT_LIST_MODE_BEGIN "command_list_begin"
 #define CLIENT_LIST_OK_MODE_BEGIN "command_list_ok_begin"
 #define CLIENT_LIST_MODE_END "command_list_end"
@@ -40,7 +43,10 @@ Client::ProcessCommandList(bool list_ok,
 static bool
 IsAsyncCommmand(const char *line) noexcept
 {
-	return StringIsEqual(line, "idle") || StringIsEqual(line, "noidle");
+	const std::string_view command{line, strcspn(line, " \t")};
+	return command == "idle" || command == "noidle" ||
+		command == "openstream" || command == "readstream" ||
+		command == "closestream";
 }
 
 CommandResult
