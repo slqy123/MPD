@@ -1,0 +1,6 @@
+[wrap-git]
+directory = fooyin-tak
+url = https://github.com/polyv0x/fooyin-tak.git
+revision = 7e05ad9665f4f3cb797e5487872b6c3eacff8d73
+depth = 1
+patch_directory = fooyin-tak

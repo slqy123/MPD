@@ -3,6 +3,18 @@ decoder_plugins_sources = [
 ]
 decoder_plugins_dependencies = []
 
+tak_option = get_option('tak')
+enable_tak = false
+if not tak_option.disabled()
+  tak_subproject = subproject('fooyin-tak', required: tak_option)
+  if tak_subproject.found()
+    enable_tak = true
+    decoder_plugins_sources += 'TakDecoderPlugin.cxx'
+    decoder_plugins_dependencies += tak_subproject.get_variable('fooyin_tak_dep')
+  endif
+endif
+decoder_features.set('ENABLE_TAK', enable_tak)
+
 if get_option('dsd')
   decoder_plugins_sources += [
     'DsdiffDecoderPlugin.cxx',

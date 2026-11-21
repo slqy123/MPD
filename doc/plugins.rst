@@ -639,6 +639,13 @@ sndfile
 
 Decodes WAV and AIFF files using `libsndfile <http://www.mega-nerd.com/libsndfile/>`_.
 
+tak
+---
+
+Decodes local TAK files using the legacy codec type 0. Build with
+``-Dtak=enabled``, Meson 1.3 or later, and Rust 1.74 or later.
+Other TAK variants and tag scans use the existing FFmpeg plugin when it is enabled.
+
 vgmstream
 ---------
 

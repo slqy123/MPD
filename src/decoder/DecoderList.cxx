@@ -21,6 +21,7 @@
 #include "plugins/AdPlugDecoderPlugin.h"
 #include "plugins/WavpackDecoderPlugin.hxx"
 #include "plugins/FfmpegDecoderPlugin.hxx"
+#include "plugins/TakDecoderPlugin.hxx"
 #include "plugins/GmeDecoderPlugin.hxx"
 #include "plugins/VgmstreamDecoderPlugin.hxx"
 #include "plugins/FaadDecoderPlugin.hxx"
@@ -102,6 +103,9 @@ constinit const struct DecoderPlugin *const decoder_plugins[] = {
 #endif
 #ifdef ENABLE_VGMSTREAM
 	&vgmstream_decoder_plugin,
+#endif
+#ifdef ENABLE_TAK
+	&tak_decoder_plugin,
 #endif
 #ifdef ENABLE_FFMPEG
 	&ffmpeg_decoder_plugin,
