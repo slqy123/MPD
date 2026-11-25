@@ -208,17 +208,13 @@ StreamRelativePts(const AVPacket &packet, const AVStream &stream) noexcept
 	return pts - start;
 }
 
-/**
- * Convert a non-negative stream-relative time stamp in
- * AVStream::time_base units to a PCM frame number.
- */
-[[gnu::pure]]
-static uint64_t
-PtsToPcmFrame(uint64_t pts, const AVStream &stream,
-	      const AVCodecContext &codec_context) noexcept
-{
-	return av_rescale_q(pts, stream.time_base, codec_context.time_base);
-}
+struct FfmpegSeekState {
+	/** The first PCM sample to keep, or zero when not trimming a seek. */
+	int64_t target_frame = 0;
+
+	/** The next PCM sample's position if a decoded frame has no timestamp. */
+	int64_t next_frame = AV_NOPTS_VALUE;
+};
 
 /**
  * Invoke DecoderClient::SubmitAudio() with the contents of an
@@ -227,8 +223,9 @@ PtsToPcmFrame(uint64_t pts, const AVStream &stream,
 static DecoderCommand
 FfmpegSendFrame(DecoderClient &client, InputStream *is,
 		AVCodecContext &codec_context,
+		const AVStream &stream,
 		const AVFrame &frame, size_t pcm_frame_size,
-		size_t &skip_bytes,
+		FfmpegSeekState &seek,
 		FfmpegBuffer &buffer)
 {
 	if (std::size_t(frame.ch_layout.nb_channels) *
@@ -239,18 +236,35 @@ FfmpegSendFrame(DecoderClient &client, InputStream *is,
 		   frame */
 		return DecoderCommand::NONE;
 
-	auto output_buffer = Ffmpeg::InterleaveFrame(frame, buffer);
+	size_t skip_bytes = 0;
+	if (seek.target_frame > 0) {
+		const AVRational sample_time_base{1, codec_context.sample_rate};
+		if (frame.best_effort_timestamp != AV_NOPTS_VALUE)
+			seek.next_frame = av_rescale_q(
+				av_sat_sub64(frame.best_effort_timestamp,
+					     start_time_fallback(stream)),
+				stream.time_base, sample_time_base);
 
-	if (skip_bytes > 0) {
-		if (skip_bytes >= output_buffer.size()) {
-			skip_bytes -= output_buffer.size();
-			return DecoderCommand::NONE;
+		if (seek.next_frame != AV_NOPTS_VALUE) {
+			const auto frame_start = seek.next_frame;
+			seek.next_frame = av_sat_add64(frame_start, frame.nb_samples);
+			if (seek.next_frame <= seek.target_frame)
+				return client.GetCommand();
+
+			if (frame_start < seek.target_frame)
+				skip_bytes = size_t(seek.target_frame - frame_start) * pcm_frame_size;
+			else if (frame_start > seek.target_frame)
+				client.SubmitTimestamp(FloatDuration(double(frame_start) /
+								     codec_context.sample_rate));
 		}
 
-		output_buffer = output_buffer.subspan(skip_bytes);
-		skip_bytes = 0;
+		/* If no timestamp was available, keep the decoder client's
+		   best-effort seek position. */
+		seek.target_frame = 0;
 	}
 
+	const auto output_buffer =
+		Ffmpeg::InterleaveFrame(frame, buffer).subspan(skip_bytes);
 	return client.SubmitAudio(is, output_buffer,
 				  codec_context.bit_rate / 1000);
 }
@@ -258,8 +272,9 @@ FfmpegSendFrame(DecoderClient &client, InputStream *is,
 static DecoderCommand
 FfmpegReceiveFrames(DecoderClient &client, InputStream *is,
 		    AVCodecContext &codec_context,
+		    const AVStream &stream,
 		    AVFrame &frame, size_t pcm_frame_size,
-		    size_t &skip_bytes,
+		    FfmpegSeekState &seek,
 		    FfmpegBuffer &buffer,
 		    bool &eof)
 {
@@ -270,8 +285,9 @@ FfmpegReceiveFrames(DecoderClient &client, InputStream *is,
 		switch (err) {
 		case 0:
 			cmd = FfmpegSendFrame(client, is, codec_context,
+					      stream,
 					      frame, pcm_frame_size,
-					      skip_bytes, buffer);
+					      seek, buffer);
 			if (cmd != DecoderCommand::NONE)
 				return cmd;
 
@@ -302,10 +318,6 @@ FfmpegReceiveFrames(DecoderClient &client, InputStream *is,
 /**
  * Decode an #AVPacket and send the resulting PCM data to the decoder
  * API.
- *
- * @param min_frame skip all data before this PCM frame number; this
- * is used after seeking to skip data in an AVPacket until the exact
- * desired time stamp has been reached
  */
 static DecoderCommand
 ffmpeg_send_packet(DecoderClient &client, InputStream *is,
@@ -313,19 +325,12 @@ ffmpeg_send_packet(DecoderClient &client, InputStream *is,
 		   AVCodecContext &codec_context,
 		   const AVStream &stream,
 		   AVFrame &frame,
-		   uint64_t min_frame, size_t pcm_frame_size,
+		   FfmpegSeekState &seek, size_t pcm_frame_size,
 		   FfmpegBuffer &buffer)
 {
-	size_t skip_bytes = 0;
-
-	const auto pts = StreamRelativePts(packet, stream);
-	if (pts >= 0) {
-		if (min_frame > 0) {
-			auto cur_frame = PtsToPcmFrame(pts, stream,
-						       codec_context);
-			if (cur_frame < min_frame)
-				skip_bytes = pcm_frame_size * (min_frame - cur_frame);
-		} else
+	if (seek.target_frame == 0) {
+		const auto pts = StreamRelativePts(packet, stream);
+		if (pts >= 0)
 			client.SubmitTimestamp(FfmpegTimeToDouble(pts,
 								  stream.time_base));
 	}
@@ -352,9 +357,9 @@ ffmpeg_send_packet(DecoderClient &client, InputStream *is,
 		return DecoderCommand::NONE;
 	}
 
-	auto cmd = FfmpegReceiveFrames(client, is, codec_context,
+	auto cmd = FfmpegReceiveFrames(client, is, codec_context, stream,
 				       frame, pcm_frame_size,
-				       skip_bytes, buffer, eof);
+				       seek, buffer, eof);
 
 	if (eof)
 		cmd = DecoderCommand::STOP;
@@ -530,6 +535,7 @@ FfmpegDecode(DecoderClient &client, InputStream *input,
 
 	Ffmpeg::CodecContext codec_context(*codec);
 	codec_context.FillFromParameters(*av_stream.codecpar);
+	codec_context->pkt_timebase = av_stream.time_base;
 	codec_context.Open(*codec, nullptr);
 
 	const SampleFormat sample_format =
@@ -565,7 +571,7 @@ FfmpegDecode(DecoderClient &client, InputStream *input,
 
 	FfmpegBuffer interleaved_buffer;
 
-	uint64_t min_frame = 0;
+	FfmpegSeekState seek;
 
 	DecoderCommand cmd = client.GetCommand();
 	while (cmd != DecoderCommand::STOP) {
@@ -584,7 +590,7 @@ FfmpegDecode(DecoderClient &client, InputStream *input,
 				client.SeekError(std::make_exception_ptr(MakeFfmpegError(error, "av_seek_frame() failed")));
 			else {
 				codec_context.FlushBuffers();
-				min_frame = client.GetSeekFrame();
+				seek = {int64_t(client.GetSeekFrame())};
 				client.CommandFinished();
 			}
 		}
@@ -606,9 +612,8 @@ FfmpegDecode(DecoderClient &client, InputStream *input,
 						 *codec_context,
 						 av_stream,
 						 *frame,
-						 min_frame, audio_format.GetFrameSize(),
+						 seek, audio_format.GetFrameSize(),
 						 interleaved_buffer);
-			min_frame = 0;
 		} else
 			cmd = client.GetCommand();
 	}
